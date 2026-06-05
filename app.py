@@ -62,7 +62,7 @@ def mostrar_login():
                 st.markdown("<br>", unsafe_allow_html=True) 
                 if st.button("Autenticarse", use_container_width=True):
                     conn = get_db_connection()
-                    cur = conn.cursor(cursor_factory=RealDictCursor)
+                    cur = conn.cursor()
                     cur.execute("SELECT id, username, password_hash, role FROM users WHERE username = %s", (u_log,))
                     user = cur.fetchone()
                     cur.close(); conn.close()
