@@ -4,7 +4,6 @@ import streamlit as st
 
 def get_db_connection():
     try:
-        # 1. Si la app está en la nube de Streamlit, detectará "DB_HOST" en los Secrets y usará AWS
         if "DB_HOST" in st.secrets:
             return psycopg2.connect(
                 host=st.secrets["DB_HOST"],
@@ -12,10 +11,9 @@ def get_db_connection():
                 user=st.secrets["DB_USER"],
                 password=st.secrets["DB_PASSWORD"],
                 port=st.secrets["DB_PORT"],
-                connect_timeout=3
+                connect_timeout=5
             )
         
-        # 2. Si estás corriendo el proyecto en tu PC local, pasará de largo y usará tu localhost de siempre
         return psycopg2.connect(
             host="localhost",
             database="petskin_db",
@@ -24,6 +22,7 @@ def get_db_connection():
             port="5432",
             connect_timeout=3
         )
-    except psycopg2.OperationalError:
-        st.error("❌ Error de conexión a PostgreSQL.")
+    except psycopg2.OperationalError as e:
+        # Aquí capturamos la queja real de PostgreSQL y la mostramos en la web
+        st.error(f"❌ Error de conexión detallado: {e}")
         st.stop()
