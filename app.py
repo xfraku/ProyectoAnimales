@@ -158,20 +158,19 @@ def mostrar_panel_clinico():
     st.markdown("<h2 style='margin-bottom: 25px;'>Panel Clínico Especializado</h2>", unsafe_allow_html=True)
     col_foto, col_espacio_mid, col_info = st.columns([1, 0.05, 1.2])
 
-    with col_foto:
+with col_foto:
         with st.container(border=True):
             st.markdown("<div style='font-size: 1.1rem; font-weight: 700; border-bottom: 2px solid #000; padding-bottom: 8px; margin-bottom: 20px;'>📸 Imagen del Paciente</div>", unsafe_allow_html=True)
             if st.session_state.current_conv_id:
                 conn = get_db_connection(); cur = conn.cursor()
                 cur.execute("SELECT imagen_path FROM conversations WHERE id = %s", (st.session_state.current_conv_id,))
                 res = cur.fetchone(); cur.close(); conn.close()
-                    if res and res['imagen_path']:
+                
+                # 🔥 DEJA ESTAS DOS LÍNEAS EXACTAMENTE CON ESTA SANGRÍA:
+                if res and res['imagen_path']:
                     st.image(res['imagen_path'], caption="Caso actual", use_container_width=True)
             else:
                 archivo = st.file_uploader("Sube la fotografía dermatológica", type=["jpg", "jpeg", "png"])
-                if archivo:
-                    if archivo.size > 20 * 1024 * 1024: st.error("Límite 20MB")
-                    else: st.image(Image.open(archivo), caption="Vista previa", use_container_width=True)
 
     with col_info:
         with st.container(border=True):
