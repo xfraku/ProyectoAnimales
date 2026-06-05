@@ -3,6 +3,6 @@ tensorflow==2.21.0
 numpy
 pillow
 openai
-psycopg2-binary==2.9.9
+pg8000
 bcrypt
 fpdf
