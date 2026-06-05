@@ -188,7 +188,7 @@ def mostrar_panel_clinico():
                     conn = get_db_connection(); cur = conn.cursor()
                     cur.execute("INSERT INTO conversations (user_id, diagnostico_ml, confianza_ml, imagen_path) VALUES (%s,%s,%s,%s) RETURNING id",
                                 (st.session_state.user_id, res_ml, conf, path))
-                    st.session_state.current_conv_id = cur.fetchone()[0]
+                    st.session_state.current_conv_id = cur.fetchone()['id']
                     conn.commit(); cur.close(); conn.close(); st.rerun()
 
             if st.session_state.current_conv_id:
