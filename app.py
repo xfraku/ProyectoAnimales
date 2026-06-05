@@ -182,6 +182,7 @@ def mostrar_panel_clinico():
                     img = Image.open(archivo).resize((224, 224))
                     pred = model.predict(tf.expand_dims(tf.keras.utils.img_to_array(img), 0))
                     conf, res_ml = float(100*np.max(pred[0])), class_names[np.argmax(pred[0])]
+                    archivo.seek(0)
                     nombre_s3 = f"consultas/u{st.session_state.user_id}_{datetime.now().strftime('%Y%m%d%H%M%S')}.png"
                     path = subir_imagen_a_s3(archivo, nombre_s3)
 
