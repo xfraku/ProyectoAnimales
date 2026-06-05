@@ -1,11 +1,11 @@
-import pg8000
+import pg8000.dbapi
 import streamlit as st
 
 def get_db_connection():
     try:
         if "DB_HOST" in st.secrets:
             # Creamos la conexión a AWS
-            conn = pg8000.connect(
+            conn = pg8000.dbapi.connect(
                 host=st.secrets["DB_HOST"],
                 database=st.secrets["DB_NAME"],
                 user=st.secrets["DB_USER"],
@@ -15,7 +15,7 @@ def get_db_connection():
             )
         else:
             # Creamos la conexión Local
-            conn = pg8000.connect(
+            conn = pg8000.dbapi.connect(
                 host="localhost",
                 database="petskin_db",
                 user="postgres",
@@ -24,8 +24,8 @@ def get_db_connection():
                 timeout=3
             )
         
-        # 🔥 TRUCO CLAVE: Configuramos la conexión para que use diccionarios de forma nativa
-        conn.run_mapper = pg8000.types.dict_row_mapper
+        # 🔥 EL TRUCO CORREGIDO: Activa el modo diccionario nativo para pg8000
+        conn.run_mapper = pg8000.dbapi.dict_row_mapper
         return conn
 
     except Exception as e:
