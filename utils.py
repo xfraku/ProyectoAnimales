@@ -60,4 +60,4 @@ def generar_hoja_tratamiento(datos_mascota, diagnostico, tratamiento_ia, img_pat
     pdf.set_text_color(100, 100, 100)
     pdf.multi_cell(190, 5, "AVISO: Este reporte es una sugerencia basada en IA. No reemplaza el juicio de un veterinario colegiado.", align="C")
     
-    return bytes(pdf.output())
+     return pdf.output(dest='S').encode('latin1') if isinstance(pdf.output(), str) else pdf.output()
