@@ -8,7 +8,7 @@ import bcrypt
 from datetime import datetime
 from database import get_db_connection
 from brain import get_openai_client, load_my_model, get_ia_response
-from utils import es_correo_valido, generar_hoja_tratamiento
+from utils import es_correo_valido, generar_hoja_tratamiento, subir_imagen_a_s3
 
 
 # ==========================================
@@ -165,8 +165,8 @@ def mostrar_panel_clinico():
                 conn = get_db_connection(); cur = conn.cursor()
                 cur.execute("SELECT imagen_path FROM conversations WHERE id = %s", (st.session_state.current_conv_id,))
                 res = cur.fetchone(); cur.close(); conn.close()
-                if res and os.path.exists(res['imagen_path']):
-                    st.image(Image.open(res['imagen_path']), caption="Caso actual", use_container_width=True)
+                if res and res['imagen_path']:
+                st.image(res['imagen_path'], caption="Caso actual", use_container_width=True)
             else:
                 archivo = st.file_uploader("Sube la fotografía dermatológica", type=["jpg", "jpeg", "png"])
                 if archivo:
@@ -182,8 +182,12 @@ def mostrar_panel_clinico():
                     img = Image.open(archivo).resize((224, 224))
                     pred = model.predict(tf.expand_dims(tf.keras.utils.img_to_array(img), 0))
                     conf, res_ml = float(100*np.max(pred[0])), class_names[np.argmax(pred[0])]
-                    path = f"img_consultas/u{st.session_state.user_id}_{datetime.now().strftime('%Y%m%d%H%M%S')}.png"
-                    Image.open(archivo).save(path)
+                    nombre_s3 = f"consultas/u{st.session_state.user_id}_{datetime.now().strftime('%Y%m%d%H%M%S')}.png"
+                    path = subir_imagen_a_s3(archivo, nombre_s3)
+
+            if not path:
+                st.error("No se pudo subir la imagen a AWS S3. Inténtalo de nuevo.")
+                st.stop()
                     
                     conn = get_db_connection(); cur = conn.cursor()
                     cur.execute("INSERT INTO conversations (user_id, diagnostico_ml, confianza_ml, imagen_path) VALUES (%s,%s,%s,%s) RETURNING id",
