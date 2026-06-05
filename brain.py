@@ -19,8 +19,10 @@ def get_openai_client():
 
 @st.cache_resource
 def load_my_model():
-    # Corregido de load_mostdel a load_model
-    return tf.keras.models.load_model('modelo_PRO_perritos.h5')
+
+    ruta_modelo = "modelo_PRO_perritos_v2.keras"
+    
+    return tf.keras.models.load_model(ruta_modelo)
 
 def get_ia_response(client, system_instruction, full_context):
     resp = client.chat.completions.create(
