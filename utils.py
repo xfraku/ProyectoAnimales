@@ -1,10 +1,38 @@
 import re
 import os
+import boto3
+import streamlit as st
 from fpdf import FPDF
 
 def es_correo_valido(correo):
     patron = r'^[\w\.-]+@[\w\.-]+\.\w+$'
     return re.match(patron, correo) is not None
+
+def subir_imagen_a_s3(archivo_streamlit, nombre_archivo):
+    """Sube un archivo de Streamlit directamente a AWS S3 y devuelve su URL pública"""
+    try:
+        # Inicializa el cliente usando las llaves de tus Streamlit Secrets
+        s3 = boto3.client(
+            's3',
+            aws_access_key_id=st.secrets["AWS_ACCESS_KEY_ID"],
+            aws_secret_access_key=st.secrets["AWS_SECRET_ACCESS_KEY"],
+            region_name=st.secrets["AWS_REGION"]
+        )
+        
+        # Sube el archivo en memoria sin guardarlo localmente
+        s3.upload_fileobj(
+            archivo_streamlit,
+            st.secrets["AWS_BUCKET_NAME"],
+            nombre_archivo,
+            ExtraArgs={"ContentType": archivo_streamlit.type}
+        )
+        
+        # Construye la URL estática del objeto en S3
+        url_publica = f"https://{st.secrets['AWS_BUCKET_NAME']}.s3.{st.secrets['AWS_REGION']}.amazonaws.com/{nombre_archivo}"
+        return url_publica
+    except Exception as e:
+        st.error(f"❌ Error al subir a AWS S3: {e}")
+        return None
 
 def generar_hoja_tratamiento(datos_mascota, diagnostico, tratamiento_ia, img_path):
     pdf = FPDF()
@@ -18,7 +46,10 @@ def generar_hoja_tratamiento(datos_mascota, diagnostico, tratamiento_ia, img_pat
     pdf.set_draw_color(40, 40, 120)
     pdf.line(10, 30, 200, 30)
     
-    if img_path and os.path.exists(img_path):
+    # Manejo de imagen: Si es un enlace de S3 (http), evitamos os.path.exists para que no falle
+    if img_path and (img_path.startswith('http://') or img_path.startswith('https://')):
+        pdf.ln(5) 
+    elif img_path and os.path.exists(img_path):
         pdf.image(img_path, x=70, y=35, w=70)
         pdf.ln(85)
     
