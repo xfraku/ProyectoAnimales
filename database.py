@@ -1,28 +1,29 @@
-import psycopg2
-from psycopg2.extras import RealDictCursor
+import pg8000
 import streamlit as st
 
 def get_db_connection():
     try:
+        # Si está en la nube, usa los Secrets de AWS con pg8000
         if "DB_HOST" in st.secrets:
-            return psycopg2.connect(
+            return pg8000.connect(
                 host=st.secrets["DB_HOST"],
                 database=st.secrets["DB_NAME"],
                 user=st.secrets["DB_USER"],
                 password=st.secrets["DB_PASSWORD"],
-                port=st.secrets["DB_PORT"],
-                connect_timeout=5
+                port=int(st.secrets["DB_PORT"]),  # pg8000 pide el puerto como número entero
+                timeout=5
             )
         
-        return psycopg2.connect(
+        # Entorno local (puedes dejarlo con psycopg2 o cambiarlo también, pero para probar la nube usemos pg8000)
+        return pg8000.connect(
             host="localhost",
             database="petskin_db",
             user="postgres",
             password="Farjevasquez16*",
-            port="5432",
-            connect_timeout=3
+            port=5432,
+            timeout=3
         )
-    except psycopg2.OperationalError as e:
-        # Aquí capturamos la queja real de PostgreSQL y la mostramos en la web
+    except Exception as e:
+        # Capturamos cualquier error para que nos avise
         st.error(f"❌ Error de conexión detallado: {e}")
         st.stop()
