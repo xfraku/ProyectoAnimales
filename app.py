@@ -63,7 +63,7 @@ def mostrar_login():
                 st.markdown("<br>", unsafe_allow_html=True) 
                 if st.button("Autenticarse", use_container_width=True):
                     conn = get_db_connection()
-                    cur = conn.cursor(row_factory=pg8000.make_dict_cursor)
+                    cur = conn.cursor()
                     cur.execute("SELECT id, username, password_hash, role FROM users WHERE username = %s", (u_log,))
                     user = cur.fetchone()
                     cur.close(); conn.close()
@@ -94,7 +94,7 @@ def mostrar_login():
 
 def mostrar_admin():
     st.markdown("<h2 style='margin-bottom: 30px;'>Gestión Administrativa de Usuarios</h2>", unsafe_allow_html=True)
-    conn = get_db_connection(); cur = conn.cursor(row_factory=pg8000.make_dict_cursor)
+    conn = get_db_connection(); cur = conn.cursor()
     cur.execute("SELECT id, username, email, role FROM users ORDER BY id ASC")
     usuarios = cur.fetchall()
 
@@ -129,7 +129,7 @@ def mostrar_panel_clinico():
 
     st.sidebar.markdown("<p style='font-size: 0.9rem; color: #666; margin-top: 20px;'><b>Historial de Consultas</b></p>", unsafe_allow_html=True)
     
-    conn = get_db_connection(); cur = conn.cursor(row_factory=pg8000.make_dict_cursor)
+    conn = get_db_connection(); cur = conn.cursor()
     cur.execute("SELECT id, diagnostico_ml, fecha, imagen_path FROM conversations WHERE user_id = %s ORDER BY fecha DESC", (st.session_state.user_id,))
     for conv in cur.fetchall():
         col_c, col_d = st.sidebar.columns([0.80, 0.20])
@@ -137,7 +137,7 @@ def mostrar_panel_clinico():
         # Botón para cargar el historial
         if col_c.button(f"{conv['fecha'].strftime('%d/%m')} - {conv['diagnostico_ml']}", key=f"c_{conv['id']}", use_container_width=True):
             st.session_state.current_conv_id = conv['id']
-            cur_int = conn.cursor(row_factory=pg8000.make_dict_cursor)
+            cur_int = conn.cursor()
             cur_int.execute("SELECT role, content FROM chat_messages WHERE conversation_id = %s ORDER BY id ASC", (conv['id'],))
             st.session_state.chat_history = cur_int.fetchall(); cur_int.close(); st.rerun()
             
@@ -162,7 +162,7 @@ def mostrar_panel_clinico():
         with st.container(border=True):
             st.markdown("<div style='font-size: 1.1rem; font-weight: 700; border-bottom: 2px solid #000; padding-bottom: 8px; margin-bottom: 20px;'>📸 Imagen del Paciente</div>", unsafe_allow_html=True)
             if st.session_state.current_conv_id:
-                conn = get_db_connection(); cur = conn.cursor(row_factory=pg8000.make_dict_cursor)
+                conn = get_db_connection(); cur = conn.cursor()
                 cur.execute("SELECT imagen_path FROM conversations WHERE id = %s", (st.session_state.current_conv_id,))
                 res = cur.fetchone(); cur.close(); conn.close()
                 if res and os.path.exists(res['imagen_path']):
@@ -192,7 +192,7 @@ def mostrar_panel_clinico():
                     conn.commit(); cur.close(); conn.close(); st.rerun()
 
             if st.session_state.current_conv_id:
-                conn = get_db_connection(); cur = conn.cursor(cursor_factory=RealDictCursor)
+                conn = get_db_connection(); cur = conn.cursor()
                 cur.execute("""
                     SELECT c.*, m.nombre, m.raza, m.peso, m.tamano, m.historial 
                     FROM conversations c LEFT JOIN mascotas m ON c.mascota_id = m.id WHERE c.id = %s
