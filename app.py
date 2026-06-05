@@ -229,7 +229,8 @@ def mostrar_panel_clinico():
                                         conn_ins = get_db_connection(); cur_ins = conn_ins.cursor()
                                         cur_ins.execute("""INSERT INTO mascotas (user_id, nombre, raza, peso, tamano, historial) VALUES (%s, %s, %s, %s, %s, %s) RETURNING id""",
                                                     (st.session_state.user_id, n_nom, n_raz, n_pes, n_tam, n_his))
-                                        cur_ins.execute("UPDATE conversations SET mascota_id = %s WHERE id = %s", (cur_ins.fetchone()[0], st.session_state.current_conv_id))
+                                        nueva_mascota = cur_ins.fetchone()
+                                        cur_ins.execute("UPDATE conversations SET mascota_id = %s WHERE id = %s", (nueva_mascota['id'], st.session_state.current_conv_id))
                                         conn_ins.commit(); cur_ins.close(); conn_ins.close(); st.rerun()
                         else:
                             st.success(f"🐾 **Paciente Vinculado:** {c_data['nombre']} | {c_data['raza']} | {c_data['peso']}kg")
