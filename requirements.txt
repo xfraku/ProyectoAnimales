@@ -6,3 +6,4 @@ openai
 pg8000
 bcrypt
 fpdf
+boto3
