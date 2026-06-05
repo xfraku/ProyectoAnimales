@@ -1,7 +1,6 @@
 import pg8000
 import streamlit as st
 
-# Creamos una clase limpia para que actúe como convertidor automático a diccionario
 class DictCursor:
     def __init__(self, connection):
         self.cursor = connection.cursor()
@@ -13,20 +12,21 @@ class DictCursor:
     def fetchone(self):
         row = self.cursor.fetchone()
         if not row: return None
-        # Mapeamos los nombres de las columnas con sus valores
-        columns = [col['name'] for col in self.cursor.description]
+        # 🔥 CORRECCIÓN: pg8000 maneja las columnas por índice. El nombre es el elemento [0]
+        columns = [col[0] for col in self.cursor.description]
         return dict(zip(columns, row))
         
     def fetchall(self):
         rows = self.cursor.fetchall()
         if not rows: return []
-        columns = [col['name'] for col in self.cursor.description]
+        # 🔥 CORRECCIÓN: Mismo ajuste para el fetchall
+        columns = [col[0] for col in self.cursor.description]
         return [dict(zip(columns, row)) for row in rows]
         
     def close(self):
         self.cursor.close()
 
-# Envoltura para la conexión estándar que use nuestro DictCursor
+# Esto lo dejas exactamente igual como estaba
 class DictConnection:
     def __init__(self, conn):
         self.conn = conn
@@ -57,7 +57,6 @@ def get_db_connection():
                 port=5432,
                 timeout=3
             )
-        # Devolvemos la conexión protegida que ya entrega diccionarios nativos
         return DictConnection(raw_conn)
     except Exception as e:
         st.error(f"❌ Error de conexión detallado: {e}")
