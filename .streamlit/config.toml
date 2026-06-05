@@ -1,0 +1,10 @@
+[server]
+maxUploadSize = 20
+
+[theme]
+base = "light"
+primaryColor = "#2A9D8F" # Verde/Azul médico (se mantiene)
+backgroundColor = "#F4F7F6" # Blanco hueso/grisáceo (No quema la vista)
+secondaryBackgroundColor = "#E0E6ED" # Gris azulado claro (Diferencia claramente el Sidebar)
+textColor = "#2B2D42"
+font = "sans serif"
