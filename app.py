@@ -141,7 +141,7 @@ def mostrar_panel_clinico():
             cur_int.execute("SELECT role, content FROM chat_messages WHERE conversation_id = %s ORDER BY id ASC", (conv['id'],))
             st.session_state.chat_history = cur_int.fetchall(); cur_int.close(); st.rerun()
             
-        # SOLUCIÓN: Botón para eliminar asegurando retorno a "Nueva Consulta" si se borra el chat actual
+        # Botón para eliminar asegurando retorno a "Nueva Consulta" si se borra el chat actual
         if col_d.button("🗑️", key=f"del_{conv['id']}", use_container_width=True):
             cur_del = conn.cursor()
             cur_del.execute("DELETE FROM chat_messages WHERE conversation_id = %s", (conv['id'],))
@@ -155,7 +155,7 @@ def mostrar_panel_clinico():
             st.rerun()
     cur.close(); conn.close()
 
-st.markdown("<h2 style='margin-bottom: 25px;'>Panel Clínico Especializado</h2>", unsafe_allow_html=True)
+    st.markdown("<h2 style='margin-bottom: 25px;'>Panel Clínico Especializado</h2>", unsafe_allow_html=True)
     col_foto, col_espacio_mid, col_info = st.columns([1, 0.05, 1.2])
 
     with col_foto:
@@ -185,9 +185,9 @@ st.markdown("<h2 style='margin-bottom: 25px;'>Panel Clínico Especializado</h2>"
                     nombre_s3 = f"consultas/u{st.session_state.user_id}_{datetime.now().strftime('%Y%m%d%H%M%S')}.png"
                     path = subir_imagen_a_s3(archivo, nombre_s3)
 
-            if not path:
-                st.error("No se pudo subir la imagen a AWS S3. Inténtalo de nuevo.")
-                st.stop()
+                    if not path:
+                        st.error("No se pudo subir la imagen a AWS S3. Inténtalo de nuevo.")
+                        st.stop()
                     
                     conn = get_db_connection(); cur = conn.cursor()
                     cur.execute("INSERT INTO conversations (user_id, diagnostico_ml, confianza_ml, imagen_path) VALUES (%s,%s,%s,%s) RETURNING id",
@@ -203,7 +203,6 @@ st.markdown("<h2 style='margin-bottom: 25px;'>Panel Clínico Especializado</h2>"
                 """, (st.session_state.current_conv_id,))
                 c_data = cur.fetchone()
                 
-                # SOLUCIÓN: Seguro extra para evitar que colapse si por alguna razón extraña la consulta falla
                 if c_data:
                     st.info(f"**Diagnóstico Preliminar:** {c_data['diagnostico_ml']} (Confianza: {c_data['confianza_ml']:.2f}%)")
                     
@@ -276,7 +275,6 @@ st.markdown("<h2 style='margin-bottom: 25px;'>Panel Clínico Especializado</h2>"
                                     finally: cur.close(); conn.close()
                             st.rerun()
                 else:
-                    # En caso de que falle la consulta
                     st.session_state.current_conv_id = None
                     st.rerun()
 
