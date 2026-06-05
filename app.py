@@ -165,8 +165,8 @@ def mostrar_panel_clinico():
                 conn = get_db_connection(); cur = conn.cursor()
                 cur.execute("SELECT imagen_path FROM conversations WHERE id = %s", (st.session_state.current_conv_id,))
                 res = cur.fetchone(); cur.close(); conn.close()
-                if res and res['imagen_path']:
-                st.image(res['imagen_path'], caption="Caso actual", use_container_width=True)
+                    if res and res['imagen_path']:
+                    st.image(res['imagen_path'], caption="Caso actual", use_container_width=True)
             else:
                 archivo = st.file_uploader("Sube la fotografía dermatológica", type=["jpg", "jpeg", "png"])
                 if archivo:
