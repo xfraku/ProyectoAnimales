@@ -38,23 +38,30 @@ def action(fn, *args, **kwargs):
 def footer():
     st.divider()
     st.caption('PetSkin AI · Orientación dermatológica canina · ' + DISCLAIMER)
-    with st.expander('Términos y Condiciones'):
-        st.markdown((ROOT / 'TERMS.md').read_text(encoding='utf-8'))
+    if st.session_state.get('session'):
+        with st.expander('Términos y Condiciones'):
+            st.markdown((ROOT / 'TERMS.md').read_text(encoding='utf-8'))
 
 
 def login_view():
     hero, form = st.columns([1.1, 1], gap='large')
     with hero:
-        st.markdown('<div class="eyebrow">PETSKIN AI / CUIDADO CANINO</div>', unsafe_allow_html=True)
-        st.title('Más claridad para cuidar su piel.')
-        st.write('Registra a tu mascota, analiza una fotografía y consulta tus dudas. Toda la información, en un mismo lugar.')
-        for title, text in [('01 · Conoce a tu paciente', 'Organiza su ficha y sus antecedentes.'),
-                            ('02 · Recibe orientación', 'Combina el análisis de imagen con tus preguntas.'),
-                            ('03 · Comparte la consulta', 'Lleva el reporte a tu veterinario.')]:
-            with st.container(border=True):
-                st.markdown('**' + title + '**')
-                st.caption(text)
-        st.caption('La IA ofrece una orientación preliminar. El diagnóstico corresponde al veterinario.')
+        st.markdown(
+            '<section class="hero-container" aria-label="Presentación de PetSkin AI">'
+            '<div class="eyebrow">PETSKIN AI / CUIDADO CANINO</div>'
+            '<h1 class="hero-title">Inteligencia al<br><span>cuidado clínico.</span></h1>'
+            '<p class="hero-subtitle">Un asistente de inteligencia artificial para apoyar '
+            'la evaluación de la piel de tu mascota y organizar su información clínica.</p>'
+            '<ul class="hero-list">'
+            '<li><strong>Orientación preliminar</strong> mediante IA</li>'
+            '<li><strong>Historial clínico</strong> integrado</li>'
+            '<li><strong>Reportes de consulta</strong> en PDF</li>'
+            '<li><strong>Asistente disponible</strong> para tus preguntas</li>'
+            '</ul>'
+            '<p class="hero-note">La IA ofrece una orientación preliminar. '
+            'El diagnóstico corresponde al veterinario.</p></section>',
+            unsafe_allow_html=True,
+        )
     with form, st.container(border=True):
         st.subheader('Bienvenido a PetSkin')
         sign_in, register = st.tabs(['Iniciar sesión', 'Crear cuenta'])
@@ -72,7 +79,9 @@ def login_view():
             email = st.text_input('Correo electrónico', max_chars=100)
             password = st.text_input('Nueva contraseña', type='password')
             st.caption('Elige una contraseña larga y exclusiva para esta cuenta.')
-            consent = st.checkbox('He leído y acepto los Términos y Condiciones disponibles al pie de página.')
+            with st.expander('Leer los Términos y Condiciones'):
+                st.markdown((ROOT / 'TERMS.md').read_text(encoding='utf-8'))
+            consent = st.checkbox('He leído y acepto los Términos y Condiciones disponibles en esta pestaña.')
             if st.form_submit_button('Crear cuenta', type='primary', use_container_width=True):
                 ok, _ = action(svc.register, username, email, password, consent)
                 if ok:

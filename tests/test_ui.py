@@ -17,7 +17,8 @@ def test_login_registration_feedback(db):
     at.text_input(key='login_password').set_value('bad')
     button(at,'Iniciar sesión').click().run()
     assert any('Credenciales inválidas' in x.value for x in at.error)
-    assert any(x.label=='Términos y Condiciones' for x in at.expander)
+    assert not any(x.label=='Términos y Condiciones' for x in at.expander)
+    assert any(x.label=='Leer los Términos y Condiciones' for x in at.expander)
 
 
 def test_user_and_specialist_views(accounts,case,monkeypatch,image_bytes):

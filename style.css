@@ -11,7 +11,28 @@ button, a { overflow-wrap: anywhere; }
 .stButton button, .stDownloadButton button, .stLinkButton a { min-height: 2.7rem; border-radius: 9px; }
 [data-testid="stMetricValue"] { color: #126b60; }
 [data-testid="stCaptionContainer"], [data-testid="stCaptionContainer"] p { color: #52625b; }
+/* Presentación original: título destacado y entrada suave, limitada al inicio. */
+.hero-container { padding: 1rem 1rem 2rem 0; animation: fadeSlideUp 1s ease-out; }
+@keyframes fadeSlideUp {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.hero-container .hero-title {
+  font-size: clamp(2.25rem, 4.5vw, 3.5rem); color: #111; line-height: 1.1;
+  font-weight: 900; letter-spacing: -.04em; margin: 0 0 1.5rem; padding: 0;
+}
+.hero-title span { color: #126b60; }
+.hero-container .hero-subtitle { font-size: 1.15rem; color: #555; line-height: 1.6; margin: 0 0 1.8rem; }
+.hero-container .hero-list { list-style: none; padding: 0; margin: 0 0 1.8rem; }
+.hero-container .hero-list li { font-size: 1.05rem; color: #222; line-height: 1.6; padding: .35rem 0 .35rem 1.6rem; position: relative; }
+.hero-list li::before { content: '—'; position: absolute; left: 0; color: #126b60; font-weight: 900; }
+.hero-list strong { font-weight: 750; }
+.hero-container .hero-note { color: #52625b; font-size: .85rem; line-height: 1.6; }
+@media (prefers-reduced-motion: reduce) {
+  .hero-container { animation: none; }
+}
 @media (max-width: 640px) {
   .block-container { padding: 1.5rem 1rem 2rem; }
   h1 { font-size: 2rem; }
+  .hero-container { padding: 0; }
 }

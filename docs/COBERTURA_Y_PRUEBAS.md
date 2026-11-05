@@ -18,7 +18,7 @@ Los archivos fuente son `P20252051_PROYECTO_HU.xlsx` y `P20252051_PROYECTO_CP (1
 | 2720 | Validación de formato de correo en registro y edición. | Ocho formatos inválidos, vacío, normalización. No verifica existencia del buzón. |
 | 2455 | Botón visible “Llamar veterinario ahora” dirigido a `gufa978@gmail.com`, con reunión configurable. | URL y botón comprobados. Falta llamada real con el destinatario. |
 | 2454 | Mismo flujo de confirmación que 2797, también desde el historial. | Prueba de cancelar y confirmar. |
-| 2451 | Términos accesibles al pie de todas las vistas y aceptación registrada. | Interfaz de acceso, registro y páginas autenticadas. |
+| 2451 | Términos accesibles en Crear cuenta y al pie de las vistas autenticadas; aceptación registrada. | Por el ajuste solicitado, no se muestra el bloque de términos en Iniciar sesión. Se conserva la lógica de aceptación. |
 | 2450 | Correo único sin diferencias por mayúsculas/espacios; índice en PostgreSQL y error específico. | Registro duplicado y dos registros simultáneos. |
 | 2448 | Cinco errores consecutivos bloquean nuevos accesos por una hora; contador y eventos persistidos. | Concurrencia, contraseña correcta durante bloqueo, expiración y reinicio. |
 | 2417 | Categorías traducidas, incluida Tiña. | Resultado, historial, gráfico, contexto nuevo de chat y PDF. No se reescriben mensajes históricos de la versión anterior. |
