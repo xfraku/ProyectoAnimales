@@ -1,305 +1,561 @@
+"""Streamlit views. Services enforce authorization independently of the interface."""
+import hashlib
+import logging
+import uuid
+from collections import Counter
+
+import pandas as pd
 import streamlit as st
-import pg8000
-import numpy as np
-import tensorflow as tf
-from PIL import Image
-import os
-import bcrypt
-from datetime import datetime
-from database import get_db_connection
-from brain import get_openai_client, load_my_model, get_ia_response
-from utils import es_correo_valido, generar_hoja_tratamiento, subir_imagen_a_s3
+
+import brain
+import services as svc
+import storage
+from domain import (DISCLAIMER, LABELS, ROLE_LABELS, ROLES, TERMS_VERSION, THRESHOLD,
+                    diagnosis, pet_fields, required_text, teams_url, validate_image)
+from reports import generate_report
+from settings import AccessError, AppError, ROOT, setting
+
+log = logging.getLogger(__name__)
+st.set_page_config(page_title='PetSkin AI · Cuidado de tu mascota', page_icon='🐾', layout='wide')
+st.markdown('<style>' + (ROOT / 'style.css').read_text(encoding='utf-8') + '</style>', unsafe_allow_html=True)
 
 
-# ==========================================
-# 1. CONFIGURACIÓN INICIAL Y RECURSOS
-# ==========================================
-st.set_page_config(page_title="PetSkin AI - Sistema de Soporte", page_icon="🐶", layout="wide")
-if not os.path.exists("img_consultas"): 
-    os.makedirs("img_consultas")
+def flash(message):
+    st.session_state.flash = message
+    st.rerun()
 
-# Cargar diseño CSS desde archivo externo
-try:
-    with open("style.css", "r") as f:
-        st.markdown(f"<style>{f.read()}</style>", unsafe_allow_html=True)
-except FileNotFoundError:
-    st.warning("Archivo style.css no encontrado.")
 
-# Carga de recursos de IA
-client = get_openai_client()
-model = load_my_model()
-class_names = ['Dermatitis', 'Fungal_infections', 'Healthy', 'Hypersensitivity', 'demodicosis', 'ringworm']
+def action(fn, *args, **kwargs):
+    try:
+        return True, fn(*args, **kwargs)
+    except AccessError:
+        raise
+    except AppError as exc:
+        st.error(str(exc))
+        return False, None
 
-# ==========================================
-# 2. MÓDULOS DE LA APLICACIÓN (VISTAS)
-# ==========================================
-def mostrar_login():
-    st.markdown("<br><br><br>", unsafe_allow_html=True)
-    col_hero, col_spacing, col_login = st.columns([1.1, 0.15, 1])
-    
-    with col_hero:
-        st.markdown(
-            "<div class='hero-container'>"
-            "<div class='hero-title'>Inteligencia al<br>cuidado clínico.</div>"
-            "<div class='hero-subtitle'>PetSkin AI eleva la dermatología veterinaria. Un asistente de visión artificial de grado clínico diseñado para optimizar diagnósticos y la gestión de pacientes.</div>"
-            "<div class='hero-list'>"
-            "<div><span class='hero-bullet'>—</span> Diagnósticos precisos mediante IA</div>"
-            "<div><span class='hero-bullet'>—</span> Historial clínico integrado</div>"
-            "<div><span class='hero-bullet'>—</span> Reportes médicos automatizados en PDF</div>"
-            "<div><span class='hero-bullet'>—</span> Orientación experta sobre tratamientos 24/7</div>"
-            "</div></div>", unsafe_allow_html=True
-        )
 
-    with col_login:
-        with st.container(border=True):
-            st.markdown("<h3 style='color: #000; font-weight: 700; text-align: center; margin-bottom: 5px;'>PetSkin AI</h3>", unsafe_allow_html=True)
-            st.markdown("<p style='color: #666; text-align: center; font-size: 0.9rem; margin-bottom: 20px;'>Inicia sesión para acceder a tu panel clínico</p>", unsafe_allow_html=True)
-            
-            tab_login, tab_registro = st.tabs(["Iniciar Sesión", "Crear Cuenta"])
-            
-            with tab_login:
-                u_log = st.text_input("Usuario", key="u_log", placeholder="Ingresa tu usuario")
-                p_log = st.text_input("Contraseña", type="password", key="p_log", placeholder="••••••••")
-                st.markdown("<br>", unsafe_allow_html=True) 
-                if st.button("Autenticarse", use_container_width=True):
-                    conn = get_db_connection()
-                    cur = conn.cursor()
-                    cur.execute("SELECT id, username, password_hash, role FROM users WHERE username = %s", (u_log,))
-                    user = cur.fetchone()
-                    cur.close(); conn.close()
-                    
-                    if user and bcrypt.checkpw(p_log.encode('utf-8'), user['password_hash'].encode('utf-8')):
-                        st.session_state.update({'authenticated': True, 'user_id': user['id'], 'username': user['username'], 'role': user.get('role', 'user')})
-                        st.rerun()
-                    else: 
-                        st.error("Credenciales inválidas. Por favor, inténtalo de nuevo.")
+def footer():
+    st.divider()
+    st.caption('PetSkin AI · Orientación dermatológica canina · ' + DISCLAIMER)
+    with st.expander('Términos y Condiciones'):
+        st.markdown((ROOT / 'TERMS.md').read_text(encoding='utf-8'))
 
-            with tab_registro:
-                new_u = st.text_input("Nuevo Usuario", key="u_reg", placeholder="Elige un usuario")
-                new_e = st.text_input("Correo Electrónico", key="e_reg", placeholder="nombre@clinica.com")
-                new_p = st.text_input("Contraseña", type="password", key="p_reg", placeholder="Crea una contraseña segura")
-                st.markdown("<br>", unsafe_allow_html=True)
-                if st.button("Crear Cuenta", use_container_width=True):
-                    if not es_correo_valido(new_e):
-                        st.error("Por favor, ingresa un correo electrónico válido.")
-                    else:
-                        try:
-                            conn = get_db_connection(); cur = conn.cursor()
-                            hashed = bcrypt.hashpw(new_p.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
-                            cur.execute("INSERT INTO users (username, email, password_hash, role) VALUES (%s,%s,%s,'user')", (new_u, new_e, hashed))
-                            conn.commit(); cur.close(); conn.close()
-                            st.success("Cuenta creada exitosamente. Ya puedes iniciar sesión.")
-                        except:
-                            st.error("El usuario o correo ya se encuentran registrados.")
 
-def mostrar_admin():
-    st.markdown("<h2 style='margin-bottom: 30px;'>Gestión Administrativa de Usuarios</h2>", unsafe_allow_html=True)
-    conn = get_db_connection(); cur = conn.cursor()
-    cur.execute("SELECT id, username, email, role FROM users ORDER BY id ASC")
-    usuarios = cur.fetchall()
-
-    for usr in usuarios:
-        with st.expander(f"👤 ID: {usr['id']} | {usr['username']} ({usr['role']})"):
-            col1, col2 = st.columns(2)
-            edit_u = col1.text_input("Username", value=usr['username'], key=f"u_{usr['id']}")
-            edit_e = col2.text_input("Email", value=usr['email'], key=f"e_{usr['id']}")
-            edit_r = st.selectbox("Rol", ["user", "admin"], index=0 if usr['role'] == 'user' else 1, key=f"r_{usr['id']}")
-            
-            c_act, c_elim = st.columns(2)
-            if c_act.button("Actualizar", key=f"upd_{usr['id']}", use_container_width=True):
-                cur.execute("UPDATE users SET username=%s, email=%s, role=%s WHERE id=%s", (edit_u, edit_e, edit_r, usr['id']))
-                conn.commit(); st.success("Datos actualizados"); st.rerun()
-            
-            if c_elim.button("Eliminar 🗑️", key=f"del_u_{usr['id']}", use_container_width=True):
-                if usr['id'] == st.session_state.user_id:
-                    st.error("No puedes eliminarte a ti mismo.")
-                else:
-                    cur.execute("DELETE FROM users WHERE id=%s", (usr['id'],))
-                    conn.commit(); st.warning("Usuario eliminado"); st.rerun()
-    cur.close(); conn.close()
-
-def mostrar_panel_clinico():
-    if 'current_conv_id' not in st.session_state: st.session_state.current_conv_id = None
-    if 'chat_history' not in st.session_state: st.session_state.chat_history = []
-
-    if st.sidebar.button("➕ Nueva Consulta", use_container_width=True):
-        st.session_state.current_conv_id = None
-        st.session_state.chat_history = []
-        st.rerun()
-
-    st.sidebar.markdown("<p style='font-size: 0.9rem; color: #666; margin-top: 20px;'><b>Historial de Consultas</b></p>", unsafe_allow_html=True)
-    
-    conn = get_db_connection(); cur = conn.cursor()
-    cur.execute("SELECT id, diagnostico_ml, fecha, imagen_path FROM conversations WHERE user_id = %s ORDER BY fecha DESC", (st.session_state.user_id,))
-    for conv in cur.fetchall():
-        col_c, col_d = st.sidebar.columns([0.80, 0.20])
-        
-        # Botón para cargar el historial
-        if col_c.button(f"{conv['fecha'].strftime('%d/%m')} - {conv['diagnostico_ml']}", key=f"c_{conv['id']}", use_container_width=True):
-            st.session_state.current_conv_id = conv['id']
-            cur_int = conn.cursor()
-            cur_int.execute("SELECT role, content FROM chat_messages WHERE conversation_id = %s ORDER BY id ASC", (conv['id'],))
-            st.session_state.chat_history = cur_int.fetchall(); cur_int.close(); st.rerun()
-            
-        # Botón para eliminar asegurando retorno a "Nueva Consulta" si se borra el chat actual
-        if col_d.button("🗑️", key=f"del_{conv['id']}", use_container_width=True):
-            cur_del = conn.cursor()
-            cur_del.execute("DELETE FROM chat_messages WHERE conversation_id = %s", (conv['id'],))
-            cur_del.execute("DELETE FROM conversations WHERE id = %s", (conv['id'],))
-            conn.commit(); cur_del.close()
-            
-            if st.session_state.current_conv_id == conv['id']:
-                st.session_state.current_conv_id = None
-                st.session_state.chat_history = []
-            
-            st.rerun()
-    cur.close(); conn.close()
-
-    st.markdown("<h2 style='margin-bottom: 25px;'>Panel Clínico Especializado</h2>", unsafe_allow_html=True)
-    col_foto, col_espacio_mid, col_info = st.columns([1, 0.05, 1.2])
-
-    with col_foto:
-        with st.container(border=True):
-            st.markdown("<div style='font-size: 1.1rem; font-weight: 700; border-bottom: 2px solid #000; padding-bottom: 8px; margin-bottom: 20px;'>📸 Imagen del Paciente</div>", unsafe_allow_html=True)
-            if st.session_state.current_conv_id:
-                conn = get_db_connection(); cur = conn.cursor()
-                cur.execute("SELECT imagen_path FROM conversations WHERE id = %s", (st.session_state.current_conv_id,))
-                res = cur.fetchone(); cur.close(); conn.close()
-                if res and res['imagen_path']:
-                    st.image(res['imagen_path'], caption="Caso actual", use_container_width=True)
-            else:
-                archivo = st.file_uploader("Sube la fotografía dermatológica", type=["jpg", "jpeg", "png"])
-                if archivo:
-                    if archivo.size > 20 * 1024 * 1024: st.error("Límite 20MB")
-                    else: st.image(Image.open(archivo), caption="Vista previa", use_container_width=True)
-
-    with col_info:
-        with st.container(border=True):
-            st.markdown("<div style='font-size: 1.1rem; font-weight: 700; border-bottom: 2px solid #000; padding-bottom: 8px; margin-bottom: 20px;'>🔬 Análisis y Diagnóstico</div>", unsafe_allow_html=True)
-            
-            if not st.session_state.current_conv_id and 'archivo' in locals() and archivo is not None:
-                with st.spinner("Procesando imagen con IA Clínica..."):
-                    img = Image.open(archivo).resize((224, 224))
-                    pred = model.predict(tf.expand_dims(tf.keras.utils.img_to_array(img), 0))
-                    conf, res_ml = float(100*np.max(pred[0])), class_names[np.argmax(pred[0])]
-                    archivo.seek(0)
-                    nombre_s3 = f"consultas/u{st.session_state.user_id}_{datetime.now().strftime('%Y%m%d%H%M%S')}.png"
-                    path = subir_imagen_a_s3(archivo, nombre_s3)
-
-                    if not path:
-                        st.error("No se pudo subir la imagen a AWS S3. Inténtalo de nuevo.")
-                        st.stop()
-                    
-                    conn = get_db_connection(); cur = conn.cursor()
-                    cur.execute("INSERT INTO conversations (user_id, diagnostico_ml, confianza_ml, imagen_path) VALUES (%s,%s,%s,%s) RETURNING id",
-                                (st.session_state.user_id, res_ml, conf, path))
-                    st.session_state.current_conv_id = cur.fetchone()['id']
-                    conn.commit(); cur.close(); conn.close(); st.rerun()
-
-            if st.session_state.current_conv_id:
-                conn = get_db_connection(); cur = conn.cursor()
-                cur.execute("""
-                    SELECT c.*, m.nombre, m.raza, m.peso, m.tamano, m.historial 
-                    FROM conversations c LEFT JOIN mascotas m ON c.mascota_id = m.id WHERE c.id = %s
-                """, (st.session_state.current_conv_id,))
-                c_data = cur.fetchone()
-                
-                if c_data:
-                    st.info(f"**Diagnóstico Preliminar:** {c_data['diagnostico_ml']} (Confianza: {c_data['confianza_ml']:.2f}%)")
-                    
-                    cur.execute("SELECT id, nombre FROM mascotas WHERE user_id = %s", (st.session_state.user_id,))
-                    mis_mascotas = cur.fetchall()
-                    opciones_m = {m['nombre']: m['id'] for m in mis_mascotas}
-
-                    with st.expander("📋 Ficha del Paciente (Mascota)", expanded=not bool(c_data['mascota_id'])):
-                        if not c_data['mascota_id']:
-                            modo = st.radio("Registro de paciente:", ["Paciente Existente", "Nuevo Paciente"], horizontal=True)
-                            if modo == "Paciente Existente" and mis_mascotas:
-                                m_sel = st.selectbox("Selecciona un paciente", options=list(opciones_m.keys()))
-                                if st.button("Vincular a Consulta"):
-                                    cur.execute("UPDATE conversations SET mascota_id = %s WHERE id = %s", (opciones_m[m_sel], st.session_state.current_conv_id))
-                                    conn.commit(); st.rerun()
-                            elif modo == "Paciente Existente" and not mis_mascotas:
-                                st.warning("No hay pacientes registrados. Selecciona 'Nuevo Paciente'.")
-                            
-                            if modo == "Nuevo Paciente":
-                                with st.form("form_nueva_mascota"):
-                                    col_m1, col_m2 = st.columns(2)
-                                    n_nom, n_raz = col_m1.text_input("Nombre"), col_m2.text_input("Raza")
-                                    n_pes, n_tam = col_m1.number_input("Peso (kg)", min_value=0.1), col_m2.selectbox("Tamaño", ["Pequeño", "Mediano", "Grande"])
-                                    n_his = st.text_area("Notas Clínicas (Opcional)")
-                                    
-                                    if st.form_submit_button("Registrar y Vincular"):
-                                        conn_ins = get_db_connection(); cur_ins = conn_ins.cursor()
-                                        cur_ins.execute("""INSERT INTO mascotas (user_id, nombre, raza, peso, tamano, historial) VALUES (%s, %s, %s, %s, %s, %s) RETURNING id""",
-                                                    (st.session_state.user_id, n_nom, n_raz, n_pes, n_tam, n_his))
-                                        nueva_mascota = cur_ins.fetchone()
-                                        cur_ins.execute("UPDATE conversations SET mascota_id = %s WHERE id = %s", (nueva_mascota['id'], st.session_state.current_conv_id))
-                                        conn_ins.commit(); cur_ins.close(); conn_ins.close(); st.rerun()
-                        else:
-                            st.success(f"🐾 **Paciente Vinculado:** {c_data['nombre']} | {c_data['raza']} | {c_data['peso']}kg")
-                            if st.button("Cambiar Paciente"):
-                                cur.execute("UPDATE conversations SET mascota_id = NULL WHERE id = %s", (st.session_state.current_conv_id,))
-                                conn.commit(); st.rerun()
-
-                    if st.session_state.chat_history and c_data['mascota_id']:
-                        primer_msg = next((m['content'] for m in st.session_state.chat_history if m['role'] == 'assistant'), "Sin tratamiento")
-                        datos_m = {'nombre': c_data['nombre'], 'raza': c_data['raza'], 'peso': c_data['peso'], 'tamano': c_data['tamano'], 'historial': c_data['historial']}
-                        pdf_bytes = generar_hoja_tratamiento(datos_m, c_data['diagnostico_ml'], primer_msg, c_data['imagen_path'])
-                        st.download_button("📄 Descargar Reporte Clínico (PDF)", data=pdf_bytes, file_name=f"Reporte_{c_data['nombre']}.pdf", mime="application/pdf", use_container_width=True)
-
-                    st.markdown("<div style='margin-top: 20px; margin-bottom: 10px; font-weight: 600;'>💬 Asistente Experto (Chat)</div>", unsafe_allow_html=True)
-                    with st.container(height=350):
-                        if not st.session_state.chat_history and c_data['mascota_id']:
-                            with st.chat_message("assistant"):
-                                st.write(f"He detectado **{c_data['diagnostico_ml']}** en **{c_data['nombre']}**. ¿Deseas indicaciones sobre el tratamiento sugerido?")
-                        for m in st.session_state.chat_history:
-                            with st.chat_message(m["role"]): st.markdown(m["content"])
-
-                    pmt = st.chat_input("Consulta al asistente experto...")
-                    if pmt:
-                        if not c_data['mascota_id']: st.warning("Vincula los datos del paciente primero.")
-                        else:
-                            with st.chat_message("user"): st.markdown(pmt)
-                            cur.execute("INSERT INTO chat_messages (conversation_id, role, content) VALUES (%s,'user',%s)", (st.session_state.current_conv_id, pmt))
-                            conn.commit()
-                            with st.chat_message("assistant"):
-                                with st.spinner("Procesando..."):
-                                    try:
-                                        instruccion = ("Eres un asistente experto en dermatología veterinaria canina. Orienta sobre el diagnóstico detectado y salud cutánea. PUEDES mencionar tratamientos generales. NO ESTÁ PROHIBIDO dar dosis exactas (pero sugiere contactar un veterinario).")
-                                        ans = get_ia_response(client, instruccion, f"Mascota: {c_data['nombre']}, Peso: {c_data['peso']}kg, Diagnóstico: {c_data['diagnostico_ml']}. Pregunta: {pmt}")
-                                        cur.execute("INSERT INTO chat_messages (conversation_id, role, content) VALUES (%s,'assistant',%s)", (st.session_state.current_conv_id, ans))
-                                        conn.commit()
-                                        st.session_state.chat_history.extend([{"role": "user", "content": pmt}, {"role": "assistant", "content": ans}])
-                                        st.markdown(ans)
-                                    except Exception: st.error("Error de conexión con la IA")
-                                    finally: cur.close(); conn.close()
-                            st.rerun()
-                else:
-                    st.session_state.current_conv_id = None
+def login_view():
+    hero, form = st.columns([1.1, 1], gap='large')
+    with hero:
+        st.markdown('<div class="eyebrow">PETSKIN AI / CUIDADO CANINO</div>', unsafe_allow_html=True)
+        st.title('Más claridad para cuidar su piel.')
+        st.write('Registra a tu mascota, analiza una fotografía y consulta tus dudas. Toda la información, en un mismo lugar.')
+        for title, text in [('01 · Conoce a tu paciente', 'Organiza su ficha y sus antecedentes.'),
+                            ('02 · Recibe orientación', 'Combina el análisis de imagen con tus preguntas.'),
+                            ('03 · Comparte la consulta', 'Lleva el reporte a tu veterinario.')]:
+            with st.container(border=True):
+                st.markdown('**' + title + '**')
+                st.caption(text)
+        st.caption('La IA ofrece una orientación preliminar. El diagnóstico corresponde al veterinario.')
+    with form, st.container(border=True):
+        st.subheader('Bienvenido a PetSkin')
+        sign_in, register = st.tabs(['Iniciar sesión', 'Crear cuenta'])
+        with sign_in, st.form('login'):
+            username = st.text_input('Usuario', key='login_username', max_chars=100)
+            password = st.text_input('Contraseña', type='password', key='login_password')
+            if st.form_submit_button('Iniciar sesión', type='primary', use_container_width=True):
+                ok, session = action(svc.login, username, password, getattr(st.context, 'ip_address', None))
+                if ok:
+                    st.session_state.clear()
+                    st.session_state.session = session
                     st.rerun()
+        with register, st.form('register'):
+            username = st.text_input('Nuevo usuario', max_chars=100)
+            email = st.text_input('Correo electrónico', max_chars=100)
+            password = st.text_input('Nueva contraseña', type='password')
+            st.caption('Elige una contraseña larga y exclusiva para esta cuenta.')
+            consent = st.checkbox('He leído y acepto los Términos y Condiciones disponibles al pie de página.')
+            if st.form_submit_button('Crear cuenta', type='primary', use_container_width=True):
+                ok, _ = action(svc.register, username, email, password, consent)
+                if ok:
+                    st.success('Cuenta creada exitosamente. Ya puedes iniciar sesión.')
 
-# ==========================================
-# 3. ENRUTADOR PRINCIPAL (FLUJO DE NAVEGACIÓN)
-# ==========================================
-if 'authenticated' not in st.session_state: 
-    st.session_state.authenticated = False
 
-if not st.session_state.authenticated:
-    mostrar_login()
-else:
-    # Sidebar global para usuarios logueados
-    st.sidebar.markdown(f"<h3 style='margin-top: 20px;'>👋 Hola, {st.session_state.username}</h3><hr style='margin: 10px 0;'>", unsafe_allow_html=True)
-    seleccion = st.sidebar.radio("Navegación", ["🐶 Panel Clínico", "👥 Usuarios"]) if st.session_state.role == 'admin' else "🐶 Panel Clínico"
-    st.sidebar.markdown("<br>", unsafe_allow_html=True)
-    
-    # Renderizado condicional
-    if seleccion == "👥 Usuarios":
-        mostrar_admin()
-    elif seleccion == "🐶 Panel Clínico":
-        mostrar_panel_clinico()
-        
-    st.sidebar.markdown("<br><br>", unsafe_allow_html=True)
-    if st.sidebar.button("Cerrar Sesión", use_container_width=True):
+def cached_image(ref):
+    # Session-local cache, read only after authorization; cleared at logout.
+    cache = st.session_state.setdefault('images', {})
+    if ref not in cache:
+        if len(cache) >= 12:
+            cache.pop(next(iter(cache)))
+        cache[ref] = storage.read_image(ref)
+    return cache[ref]
+
+
+def cleanup_failed_upload(ref):
+    from database import transaction
+    try:
+        with transaction() as cur:
+            svc.queue_cleanup(cur, ref)
+    except AppError:
+        try:
+            storage.delete_image(ref)
+        except AppError:
+            log.warning('An uploaded file could not be queued for cleanup.')
+
+
+def pet_form(session, pet=None, link_case=None):
+    pet = pet or {}
+    key = f"pet_{pet.get('id', 'new')}_{link_case or 0}"
+    with st.form(key, clear_on_submit=not bool(pet)):
+        a, b = st.columns(2)
+        nombre = a.text_input('Nombre *', value=pet.get('nombre', ''), max_chars=100)
+        raza = b.text_input('Raza *', value=pet.get('raza', ''), max_chars=100, help='Puedes indicar Mestizo o Desconocida.')
+        peso = a.number_input('Peso (kg) *', min_value=0.1, max_value=120.0,
+                             value=min(120.0, max(0.1, float(pet.get('peso', 5)))), step=0.1)
+        sizes = ['Pequeño', 'Mediano', 'Grande']
+        tamano = b.selectbox('Tamaño *', sizes, index=sizes.index(pet['tamano']) if pet.get('tamano') in sizes else 0)
+        color = st.text_input('Color del pelaje (opcional)', value=pet.get('color', ''), max_chars=100)
+        notes = st.text_area('Antecedentes y notas (opcional)', value=pet.get('historial') or '', max_chars=5000)
+        photo = st.file_uploader('Foto de la mascota (opcional)', type=['jpg', 'jpeg', 'png'], key=key+'_photo') if not pet else None
+        st.caption('* Campos obligatorios. Peso permitido: de 0,1 a 120 kg.')
+        if st.form_submit_button('Guardar cambios' if pet else 'Registrar mascota', type='primary', use_container_width=True):
+            def save():
+                fields = pet_fields(nombre, raza, peso, tamano, notes, color)
+                ref = None
+                if photo:
+                    image = validate_image(photo.getvalue(), photo.name)
+                    svc.current_user(session)
+                    ref = storage.upload_image(image, session['id'], str(uuid.uuid4()), 'mascotas')
+                try:
+                    pet_id = svc.save_pet(session, fields, pet.get('id'), ref)
+                except Exception:
+                    if ref:
+                        cleanup_failed_upload(ref)
+                    raise
+                if link_case:
+                    svc.attach_legacy_pet(session, link_case, pet_id)
+                return pet_id
+            ok, _ = action(save)
+            if ok:
+                flash('Ficha de la mascota guardada.')
+
+
+def pets_view(session):
+    st.title('Mis mascotas')
+    st.write('Registra a tus pacientes antes del análisis y mantén sus fichas al día.')
+    rows = svc.pets(session)
+    with st.expander('Registrar una mascota', expanded=not rows):
+        pet_form(session)
+    if not rows:
+        st.info('Aún no tienes mascotas registradas. Empieza con su nombre y datos básicos.')
+    for pet in rows:
+        with st.expander(f"{pet['nombre']} · {pet['raza']} · #{pet['id']}"):
+            if pet.get('imagen_path'):
+                ok, image = action(cached_image, pet['imagen_path'])
+                if ok:
+                    st.image(image, width=220)
+            st.caption('Los cambios se aplican a las próximas consultas. Las anteriores conservan sus datos.')
+            pet_form(session, pet)
+
+
+def new_consultation(session):
+    st.title('Nueva consulta')
+    st.write('Selecciona al paciente y una fotografía nítida de la zona que quieres consultar.')
+    rows = svc.pets(session)
+    if not rows:
+        st.info('Primero registra a tu mascota. También puedes hacerlo desde «Mis mascotas».')
+        pet_form(session)
+        return
+    lookup = {p['id']: p for p in rows}
+    pet_id = st.selectbox('1 · Paciente', options=list(lookup),
+                        format_func=lambda i: f"{lookup[i]['nombre']} · {lookup[i]['raza']} · #{i}")
+    with st.expander('Registrar otro paciente'):
+        pet_form(session)
+    source = st.radio('2 · Fotografía', ['Galería', 'Cámara'], horizontal=True)
+    left, right = st.columns([1, 1], gap='large')
+    with left, st.container(border=True):
+        file = (st.file_uploader('Seleccionar imagen JPG o PNG', type=['jpg', 'jpeg', 'png'], key='analysis_upload')
+                if source == 'Galería' else st.camera_input('Tomar una fotografía', key='analysis_camera'))
+        prepared = None
+        if file:
+            ok, prepared = action(validate_image, file.getvalue(), file.name)
+            if ok:
+                st.image(prepared, caption='Vista previa de la fotografía', use_container_width=True)
+        st.caption('JPG, JPEG o PNG · Hasta 20 MB · Evita desenfoque, oscuridad y documentos.')
+    with right, st.container(border=True):
+        st.subheader('3 · Analizar la imagen')
+        st.write('Primero comprobaremos que la fotografía sea pertinente. Luego, el modelo estimará una de sus seis categorías.')
+        st.caption('Las fotografías se envían a OpenAI para la validación. El resultado es orientativo y puede equivocarse.')
+        if st.button('Analizar fotografía', type='primary', use_container_width=True, disabled=prepared is None):
+            def analyze():
+                svc.current_user(session)
+                pet_fields(**{k: lookup[pet_id][k] for k in ('nombre','raza','peso','tamano','historial','color')})
+                identity = f'{pet_id}:' + hashlib.sha256(prepared).hexdigest()
+                if st.session_state.get('analysis_identity') != identity:
+                    st.session_state.analysis_identity = identity
+                    st.session_state.analysis_request = str(uuid.uuid4())
+                request = st.session_state.analysis_request
+                with st.spinner('Comprobando la fotografía y analizando la piel…'):
+                    validation = brain.validate_relevance(prepared)
+                    code, confidence = brain.predict(prepared)
+                    svc.current_user(session)
+                    ref = storage.upload_image(prepared, session['id'], request)
+                    try:
+                        case_id = svc.create_case(session, pet_id, code, confidence, ref, request, validation['model'],
+                                                  validation['urgente'], validation['motivo_urgencia'])
+                    except Exception:
+                        cleanup_failed_upload(ref)
+                        raise
+                st.session_state.setdefault('images', {})[ref] = prepared
+                return case_id
+            ok, case_id = action(analyze)
+            if ok:
+                st.session_state.current_case = case_id
+                flash('Análisis guardado. Puedes consultar al asistente o descargar el reporte.')
+
+
+def teams_button():
+    url = teams_url(setting('TEAMS_CONTACT_EMAIL', 'gufa978@gmail.com'), setting('TEAMS_MEETING_URL', ''))
+    st.link_button('Llamar veterinario ahora', url, type='primary', use_container_width=True)
+    st.caption('Se abrirá Microsoft Teams. La llamada depende de la disponibilidad del veterinario.')
+
+
+def consultation_view(session, case_id):
+    case, messages = svc.detail(session, case_id)
+    pet = case.get('patient_snapshot') or {}
+    st.title(pet.get('nombre') or 'Consulta sin paciente')
+    st.caption(f"Consulta #{case_id} · {case['fecha'].strftime('%d/%m/%Y %H:%M:%S')} · Hora de Lima")
+    left, right = st.columns([1, 1.25], gap='large')
+    image = None
+    with left, st.container(border=True):
+        st.subheader('Fotografía del paciente')
+        ok, image = action(cached_image, case['imagen_path'])
+        if ok:
+            st.image(image, use_container_width=True)
+        elif st.button('Reintentar cargar imagen'):
+            st.rerun()
+        if pet:
+            st.markdown(f"**Raza:** {pet['raza']}  ·  **Peso:** {pet['peso']} kg  ·  **Tamaño:** {pet['tamano']}")
+            with st.expander('Ficha y antecedentes'):
+                st.write(pet.get('historial') or 'Sin antecedentes registrados.')
+                st.caption(pet.get('origen', 'Datos registrados al crear la consulta'))
+        else:
+            st.warning('Vincula un paciente para continuar la conversación.')
+            options = svc.pets(session)
+            if options:
+                idx = st.selectbox('Paciente para esta consulta', options=range(len(options)),
+                                   format_func=lambda i: f"{options[i]['nombre']} · #{options[i]['id']}")
+                if st.button('Vincular paciente'):
+                    ok, _ = action(svc.attach_legacy_pet, session, case_id, options[idx]['id'])
+                    if ok:
+                        flash('Paciente vinculado.')
+            with st.expander('Registrar y vincular un paciente'):
+                pet_form(session, link_case=case_id)
+    with right:
+        with st.container(border=True):
+            st.subheader('Resultado preliminar')
+            (st.warning if case['confianza_ml'] < THRESHOLD else st.info)(case['label'])
+            st.metric('Confianza del modelo', f"{case['confianza_ml']:.2f} %")
+            st.caption('Umbral de presentación: 60 %. La confianza no equivale a exactitud clínica.')
+            if case['confianza_ml'] < THRESHOLD:
+                st.write('No hay confianza suficiente para indicar una afección. Prueba una fotografía más clara y consulta al veterinario.')
+            if case['diagnostico_ml'] == 'ringworm' and case['confianza_ml'] >= THRESHOLD:
+                st.warning('Posible riesgo de contagio: la tiña requiere confirmación veterinaria. Evita compartir cepillos y lávate las manos tras el contacto.')
+            if case['urgent']:
+                st.error('Atención veterinaria: ' + (case['alert_reason'] or 'Se han informado señales preocupantes.'))
+                st.write('Ante una emergencia, acude a un servicio veterinario; no esperes una videollamada.')
+            st.markdown('**Cuidados preventivos**')
+            st.write(case['advice'])
+        with st.container(border=True):
+            st.subheader('Tu reporte')
+            st.caption('Disponible desde el análisis. Incluye la ficha, el resultado y todos los mensajes registrados.')
+            pdf = generate_report(case, messages, image)
+            st.download_button('Descargar reporte PDF', pdf, f'PetSkin_consulta_{case_id}.pdf', 'application/pdf',
+                               type='primary', use_container_width=True, key=f'pdf_download_{case_id}')
+            if st.button('Ver reporte PDF', use_container_width=True):
+                st.session_state.preview_case = case_id
+            if messages:
+                last_id = messages[-1]['id']
+                fresh = case.get('summary') and case.get('summary_message_id') == last_id
+                st.caption('Resumen actualizado.' if fresh else 'Puedes añadir un resumen. La descarga ya incluye toda la conversación.')
+                if st.button('Actualizar resumen del reporte', use_container_width=True):
+                    with st.spinner('Preparando el resumen…'):
+                        ok, summary = action(brain.summarize, case, messages)
+                    if ok:
+                        ok, _ = action(svc.save_summary, session, case_id, summary, last_id)
+                        if ok:
+                            flash('Resumen actualizado y disponible en el PDF.')
+    if st.session_state.get('preview_case') == case_id:
+        with st.expander('Vista previa del reporte PDF', expanded=True):
+            st.pdf(pdf, height=600, key=f'pdf_view_{case_id}')
+    st.subheader('Conversa sobre esta consulta')
+    st.caption('Describe los síntomas, desde cuándo aparecieron y cualquier cambio reciente.')
+    for msg in messages:
+        with st.chat_message(msg['role']):
+            st.markdown(msg['content'])
+    if not messages:
+        with st.chat_message('assistant'):
+            st.write(f"El resultado preliminar es: {case['label']}. ¿Qué has observado en tu mascota?")
+    teams_button()
+    with st.form(f'chat_{case_id}', clear_on_submit=False):
+        question = st.text_area('Tu consulta', max_chars=4000, key=f'question_{case_id}',
+                                placeholder='Ejemplo: se rasca desde ayer, ¿qué cuidados generales puedo darle?')
+        if st.form_submit_button('Enviar consulta', type='primary', disabled=not bool(pet)):
+            def send():
+                query = required_text(question, 'Consulta', 4000)
+                identity = hashlib.sha256((str(case_id)+str(messages[-1]['id'] if messages else 0)+query).encode()).hexdigest()
+                request = str(uuid.uuid5(uuid.NAMESPACE_URL, identity))
+                with st.spinner('Preparando orientación…'):
+                    response = brain.answer(case, messages, query)
+                    svc.append_exchange(session, case_id, query, response['respuesta'], response['urgente'],
+                                        response['motivo_urgencia'], request, messages[-1]['id'] if messages else 0)
+            ok, _ = action(send)
+            if ok:
+                st.session_state.clear_question = case_id
+                flash('Respuesta guardada en la consulta.')
+    with st.expander('Valorar la orientación recibida'):
+        st.write('¿Esta orientación te resultó útil? Tu valoración no mide la exactitud del diagnóstico.')
+        a, b = st.columns(2)
+        if a.button('Sí, me resultó útil', use_container_width=True):
+            svc.feedback(session, case_id, True)
+            flash('Gracias por tu valoración.')
+        if b.button('No me resultó útil', use_container_width=True):
+            svc.feedback(session, case_id, False)
+            flash('Gracias. Tu valoración quedó registrada.')
+        if case['useful'] is not None:
+            st.caption('Valoración guardada: ' + ('Útil' if case['useful'] else 'No útil'))
+    if st.button('Eliminar esta consulta'):
+        st.session_state.pending = {'kind': 'case', 'id': case_id, 'label': f"#{case_id} · {pet.get('nombre', 'Sin paciente')}"}
+
+
+def history_view(session):
+    st.title('Historial de consultas')
+    rows = svc.cases(session)
+    search = st.text_input('Buscar por paciente, resultado o número de consulta')
+    if not rows:
+        st.info('Todavía no hay consultas. Empieza desde «Nueva consulta».')
+    for row in rows:
+        label = f"#{row['id']} · {row['nombre']} · {row['fecha'].strftime('%d/%m/%Y %H:%M:%S')} · {diagnosis(row['diagnostico_ml'], row['confianza_ml'])}"
+        if search.casefold() not in label.casefold():
+            continue
+        with st.container(border=True):
+            st.markdown('**' + label + '**')
+            a, b = st.columns([3, 1])
+            if a.button('Abrir consulta', key=f"open_{row['id']}", use_container_width=True):
+                st.session_state.current_case = row['id']
+                st.session_state.next_page = 'Nueva consulta'
+                st.rerun()
+            if b.button('Eliminar', key=f"delete_{row['id']}", use_container_width=True):
+                st.session_state.pending = {'kind': 'case', 'id': row['id'], 'label': label}
+
+
+def users_view(session):
+    st.title('Gestión de usuarios')
+    st.write('Busca cuentas, actualiza sus datos y administra sus permisos.')
+    search = st.text_input('Buscar por usuario o correo', placeholder='Nombre de usuario o correo electrónico')
+    rows = svc.list_users(session, search)
+    table = [{'ID': r['id'], 'Usuario': r['username'], 'Correo': r['email'], 'Rol': ROLE_LABELS[r['role']],
+              'Estado': 'Activo' if r['active'] else 'Inhabilitado'} for r in rows]
+    st.dataframe(pd.DataFrame(table), hide_index=True, use_container_width=True)
+    st.caption('Cuentas más recientes primero. Los especialistas tienen las mismas funciones clínicas que los usuarios.')
+    if not rows:
+        st.info('No se encontraron cuentas para esa búsqueda.')
+    for user in rows:
+        uid = user['id']
+        with st.expander(f"#{uid} · {user['username']} · {'Activo' if user['active'] else 'Inhabilitado'}"):
+            with st.form(f'user_{uid}'):
+                a, b = st.columns(2)
+                name = a.text_input('Usuario', value=user['username'])
+                email = b.text_input('Correo electrónico', value=user['email'])
+                role = st.selectbox('Rol', ROLES, index=ROLES.index(user['role']), format_func=ROLE_LABELS.get)
+                if st.form_submit_button('Guardar cambios', type='primary'):
+                    st.session_state.pending = dict(kind='user', id=uid, label=user['username'], action='edit',
+                                                    kwargs=dict(username=name, email=email, role=role))
+            with st.form(f'password_{uid}'):
+                password = st.text_input('Nueva contraseña', type='password')
+                if st.form_submit_button('Cambiar contraseña'):
+                    st.session_state.pending = dict(kind='user', id=uid, label=user['username'], action='password',
+                                                    kwargs=dict(password=password))
+            a, b, c = st.columns(3)
+            if a.button('Suspender' if user['active'] else 'Reactivar', key=f'status_{uid}', use_container_width=True):
+                st.session_state.pending = dict(kind='user', id=uid, label=user['username'],
+                                                action='disable' if user['active'] else 'enable', kwargs={})
+            if b.button('Desbloquear acceso', key=f'unlock_{uid}', use_container_width=True, disabled=not user['failed_attempts']):
+                st.session_state.pending = dict(kind='user', id=uid, label=user['username'], action='unlock', kwargs={})
+            if c.button('Eliminar cuenta', key=f'remove_{uid}', use_container_width=True):
+                st.session_state.pending = dict(kind='user', id=uid, label=user['username'], action='delete', kwargs={})
+            if user['locked_until']:
+                st.caption(f"Bloqueo hasta: {user['locked_until']}")
+
+
+def admin_view(session):
+    st.title('Métricas y auditoría')
+    data = svc.admin_data(session)
+    stats, audit, advice, security = st.tabs(['Estadísticas', 'Auditoría', 'Consejos preventivos', 'Accesos y archivos'])
+    with stats:
+        rows = data['cases']
+        a, b, c = st.columns(3)
+        a.metric('Consultas registradas', len(rows))
+        b.metric('Valoradas como útiles', sum(r['useful'] is True for r in rows))
+        c.metric('Sin valoración', sum(r['useful'] is None for r in rows))
+        st.caption('La utilidad es una valoración del usuario; no constituye validación de exactitud clínica.')
+        if st.button('Ver gráfico', type='primary'):
+            st.session_state.show_chart = True
+        if st.session_state.get('show_chart'):
+            counts = Counter(diagnosis(r['diagnostico_ml'], r['confianza_ml']) for r in rows)
+            chart = pd.DataFrame({'Categoría': list(LABELS.values())+['Resultado no concluyente']})
+            chart['Consultas'] = chart['Categoría'].map(lambda label: counts[label])
+            st.bar_chart(chart.set_index('Categoría'), color='#177c70')
+            st.dataframe(chart, hide_index=True, use_container_width=True)
+    with audit:
+        st.subheader('Distribución de los datos')
+        st.caption('Estas distribuciones ayudan a revisar la cobertura. Por sí solas no demuestran sesgo ni permiten medir exactitud.')
+        audit_rows = [{'Consulta': r['id'], 'Raza': (r['patient_snapshot'] or {}).get('raza') or 'No registrada',
+                       'Color': (r['patient_snapshot'] or {}).get('color') or 'No registrado',
+                       'Resultado': diagnosis(r['diagnostico_ml'], r['confianza_ml'])} for r in data['cases']]
+        df = pd.DataFrame(audit_rows, columns=['Consulta','Raza','Color','Resultado'])
+        field = st.selectbox('Agrupar por', ['Raza', 'Color', 'Resultado'])
+        if not df.empty:
+            st.bar_chart(df.groupby(field).size().rename('Consultas'))
+        st.dataframe(df, hide_index=True, use_container_width=True)
+        with st.form('finding'):
+            evidence = st.text_area('Evidencia u observación', max_chars=5000, help='Incluye los números de consulta relevantes.')
+            recommendation = st.text_area('Acción recomendada', max_chars=5000)
+            if st.form_submit_button('Registrar observación', type='primary'):
+                ok, _ = action(svc.add_finding, session, evidence, recommendation)
+                if ok:
+                    flash('Observación de auditoría registrada.')
+        st.dataframe(pd.DataFrame(data['findings']), hide_index=True, use_container_width=True)
+    with advice:
+        st.write('Estos consejos aparecen junto al resultado y en el reporte. Deben ser revisados por un veterinario.')
+        for item in data['advice']:
+            code = item['diagnosis_code']
+            with st.form(f'advice_{code}'):
+                text = st.text_area(LABELS.get(code, 'Resultado no concluyente'), value=item['content'], max_chars=5000)
+                if st.form_submit_button('Guardar consejo'):
+                    ok, _ = action(svc.update_advice, session, code, text)
+                    if ok:
+                        flash('Consejo preventivo actualizado.')
+    with security:
+        st.subheader('Intentos de acceso recientes')
+        st.caption('Últimos 200 eventos. Una IP vacía indica que la plataforma no la proporcionó.')
+        st.dataframe(pd.DataFrame(data['access']), hide_index=True, use_container_width=True)
+        st.subheader('Cambios administrativos')
+        st.dataframe(pd.DataFrame(data['changes']), hide_index=True, use_container_width=True)
+        st.subheader('Fotografías pendientes de eliminación')
+        st.write(f"{len(data['cleanup'])} archivos en cola. Las consultas eliminadas ya no aparecen en el historial.")
+        st.dataframe(pd.DataFrame(data['cleanup']), hide_index=True, use_container_width=True)
+        if st.button('Procesar archivos pendientes', disabled=not data['cleanup']):
+            ok, count = action(svc.cleanup_storage, session, 20)
+            if ok:
+                flash(f'Se eliminaron {count} archivos. Los que fallen permanecen en la cola para reintentar.')
+
+
+@st.dialog('Confirmar operación')
+def confirm_pending(session):
+    pending = st.session_state.pending
+    st.write(pending['label'])
+    if pending['kind'] == 'case':
+        st.warning('Se eliminarán permanentemente esta consulta y todos sus mensajes. Esta acción no se puede deshacer.')
+    elif pending['action'] == 'delete':
+        st.warning('Se eliminarán permanentemente la cuenta, sus mascotas y sus consultas. Esta acción no se puede deshacer.')
+    elif pending['action'] == 'edit':
+        st.write({'Usuario': pending['kwargs']['username'], 'Correo': pending['kwargs']['email'],
+                  'Rol': ROLE_LABELS.get(pending['kwargs']['role'])})
+        st.info('El usuario deberá iniciar sesión nuevamente para aplicar el cambio.')
+    else:
+        labels = {'disable':'Inhabilitar la cuenta y cerrar sus sesiones.', 'enable':'Reactivar el acceso de la cuenta.',
+                  'password':'Actualizar la contraseña y cerrar las sesiones anteriores.', 'unlock':'Quitar el bloqueo por intentos fallidos.'}
+        st.info(labels[pending['action']])
+    a, b = st.columns(2)
+    if a.button('Cancelar', use_container_width=True):
+        del st.session_state.pending
+        st.rerun()
+    if b.button('Confirmar', type='primary', use_container_width=True):
+        if pending['kind'] == 'case':
+            ok, _ = action(svc.delete_case, session, pending['id'])
+        else:
+            ok, _ = action(svc.change_user, session, pending['id'], pending['action'], **pending['kwargs'])
+        if ok:
+            if pending['kind'] == 'case' and st.session_state.get('current_case') == pending['id']:
+                st.session_state.current_case = None
+            st.session_state.images = {}
+            del st.session_state.pending
+            notice = 'Consulta eliminada.' if pending['kind'] == 'case' else {
+                'edit':'Datos actualizados.', 'password':'Contraseña actualizada.', 'disable':'Cuenta inhabilitada.',
+                'enable':'Cuenta reactivada.', 'delete':'Cuenta eliminada.', 'unlock':'Acceso desbloqueado.'}[pending['action']]
+            flash(notice)
+
+
+def main():
+    if 'clear_question' in st.session_state:
+        st.session_state[f"question_{st.session_state.pop('clear_question')}"] = ''
+    if 'flash' in st.session_state:
+        st.success(st.session_state.pop('flash'))
+    session = st.session_state.get('session')
+    if not session:
+        login_view()
+        return
+    user = svc.current_user(session)
+    if user['terms_version'] != TERMS_VERSION:
+        st.title('Antes de continuar')
+        st.write('Consulta los Términos y Condiciones al pie de la página.')
+        consent = st.checkbox('He leído y acepto los Términos y Condiciones.')
+        if st.button('Continuar', type='primary', disabled=not consent):
+            svc.accept_terms(session)
+            st.rerun()
+        if st.button('Cerrar sesión'):
+            st.session_state.clear()
+            st.rerun()
+        return
+    st.sidebar.markdown('## 🐾 PetSkin AI')
+    st.sidebar.write(user['username'])
+    st.sidebar.caption(ROLE_LABELS[user['role']])
+    if user['role'] == 'especialista':
+        st.sidebar.caption('Asistencia para la evaluación veterinaria de tus propios pacientes.')
+    options = ['Nueva consulta', 'Mis mascotas', 'Historial']
+    if user['role'] == 'admin':
+        options += ['Usuarios', 'Métricas y auditoría']
+    if st.session_state.get('next_page'):
+        st.session_state.page = st.session_state.pop('next_page')
+    page = st.sidebar.radio('Navegación', options, key='page')
+    if st.sidebar.button('Empezar otra consulta', use_container_width=True):
+        st.session_state.current_case = None
+        for key in ('analysis_identity', 'analysis_upload', 'analysis_camera'):
+            st.session_state.pop(key, None)
+        st.session_state.next_page = 'Nueva consulta'
+        st.rerun()
+    st.sidebar.divider()
+    if st.sidebar.button('Cerrar sesión', use_container_width=True):
         st.session_state.clear()
         st.rerun()
+    if page == 'Nueva consulta':
+        if st.session_state.get('current_case'):
+            consultation_view(session, st.session_state.current_case)
+        else:
+            new_consultation(session)
+    elif page == 'Mis mascotas':
+        pets_view(session)
+    elif page == 'Historial':
+        history_view(session)
+    elif page == 'Usuarios':
+        users_view(session)
+    else:
+        admin_view(session)
+    if st.session_state.get('pending'):
+        confirm_pending(session)
+
+
+try:
+    main()
+except AccessError as exc:
+    st.session_state.clear()
+    st.session_state.flash = str(exc)
+    st.rerun()
+except AppError as exc:
+    st.error(str(exc))
+    if st.button('Volver a intentar'):
+        st.rerun()
+except Exception as exc:
+    log.error('Unexpected application error: %s', type(exc).__name__)
+    st.error('No se pudo completar esta acción. Vuelve a intentarlo. Si el problema continúa, informa al administrador.')
+finally:
+    footer()

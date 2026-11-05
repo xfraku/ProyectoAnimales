@@ -1,0 +1,6 @@
+-r requirements.txt
+pytest>=8,<10
+pytest-cov>=6,<8
+playwright>=1.50,<2
+pypdf>=5,<7
+pypdfium2>=4,<6
