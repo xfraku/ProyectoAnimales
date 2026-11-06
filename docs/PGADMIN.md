@@ -57,4 +57,4 @@ La consulta final confirma la versión aplicada sin mostrar contraseñas.
 
 Sube a GitHub el código actualizado de esta misma entrega y reinicia Streamlit. Conserva tus Secrets actuales, incluida la API key. Las nuevas fotografías se guardan dentro de `consultas/*`, por lo que mantienen compatibilidad con la política S3 original: no necesitas modificar IAM para esta actualización.
 
-Comprueba una consulta real con foto, chat, PDF y Teams. La aplicación usa el mismo RDS, bucket y cuentas; las funciones nuevas requieren las columnas/tablas añadidas por este SQL.
+Comprueba una consulta real con foto, chat, PDF y WhatsApp. La aplicación usa el mismo RDS, bucket y cuentas; las funciones nuevas requieren las columnas/tablas añadidas por este SQL.

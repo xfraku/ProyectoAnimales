@@ -52,8 +52,8 @@ def run():
         # The built-in viewer must render an embedded canvas, not an empty iframe.
         page.wait_for_timeout(1800)
         snapshot(page,'04_pdf_preview')
-        link=page.get_by_role('link',name='Llamar veterinario ahora')
-        assert 'gufa978%40gmail.com' in link.get_attribute('href')
+        link=page.get_by_role('link',name='Llamar veterinario por WhatsApp')
+        assert link.get_attribute('href') == 'https://wa.me/12025550123'
         page.get_by_label('Tu consulta',exact=True).fill('Se rasca desde ayer. ¿Qué cuidados puedo darle?')
         page.get_by_role('button',name='Enviar consulta',exact=True).click()
         expect(page.get_by_text('Respuesta guardada en la consulta.',exact=True)).to_be_visible()

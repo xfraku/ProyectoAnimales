@@ -11,7 +11,7 @@ import brain
 import services as svc
 import storage
 from domain import (DISCLAIMER, LABELS, ROLE_LABELS, ROLES, TERMS_VERSION, THRESHOLD,
-                    diagnosis, pet_fields, required_text, teams_url, validate_image)
+                    diagnosis, pet_fields, required_text, whatsapp_url, validate_image)
 from reports import generate_report
 from settings import AccessError, AppError, ROOT, setting
 
@@ -221,10 +221,14 @@ def new_consultation(session):
                 flash('Análisis guardado. Puedes consultar al asistente o descargar el reporte.')
 
 
-def teams_button():
-    url = teams_url(setting('TEAMS_CONTACT_EMAIL', 'gufa978@gmail.com'), setting('TEAMS_MEETING_URL', ''))
-    st.link_button('Llamar veterinario ahora', url, type='primary', use_container_width=True)
-    st.caption('Se abrirá Microsoft Teams. La llamada depende de la disponibilidad del veterinario.')
+def whatsapp_button():
+    url = whatsapp_url(setting('WHATSAPP_PHONE', ''))
+    if url:
+        st.link_button('Llamar veterinario por WhatsApp', url, type='primary', use_container_width=True)
+        st.caption('Se abrirá el chat del veterinario. Pulsa el ícono del teléfono para llamar.')
+    else:
+        st.button('Llamar veterinario por WhatsApp', disabled=True, use_container_width=True)
+        st.caption('El contacto del veterinario aún no está disponible.')
 
 
 def consultation_view(session, case_id):
@@ -303,7 +307,7 @@ def consultation_view(session, case_id):
     if not messages:
         with st.chat_message('assistant'):
             st.write(f"El resultado preliminar es: {case['label']}. ¿Qué has observado en tu mascota?")
-    teams_button()
+    whatsapp_button()
     with st.form(f'chat_{case_id}', clear_on_submit=False):
         question = st.text_area('Tu consulta', max_chars=4000, key=f'question_{case_id}',
                                 placeholder='Ejemplo: se rasca desde ayer, ¿qué cuidados generales puedo darle?')

@@ -1,6 +1,5 @@
 import io
 import math
-from urllib.parse import parse_qs, urlparse
 
 import pytest
 from PIL import Image
@@ -55,12 +54,10 @@ def test_small_large_and_disguised_images():
         with pytest.raises(AppError): validate_image(out.getvalue(),'foto.png')
 
 
-def test_teams_link_and_meeting():
-    url=teams_url('gufa978@gmail.com')
-    assert parse_qs(urlparse(url).query)['users']==['gufa978@gmail.com']
-    assert urlparse(url).path=='/l/call/0/0'
-    assert teams_url('gufa978@gmail.com','https://teams.live.com/meet/123').endswith('/123')
-    with pytest.raises(AppError): teams_url('gufa978@gmail.com','https://evil.example/teams')
+def test_whatsapp_link():
+    assert whatsapp_url('+1 (202) 555-0123') == 'https://wa.me/12025550123'
+    for invalid in ('', None, 'contacto', '0012025550123', '123?text=hola', '1' * 16):
+        assert whatsapp_url(invalid) is None
 
 
 def test_password_and_multiline_question():

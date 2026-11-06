@@ -2,7 +2,7 @@
 import io
 import math
 import warnings
-from urllib.parse import urlencode, urlparse
+import re
 
 from email_validator import EmailNotValidError, validate_email
 from PIL import Image, ImageOps, UnidentifiedImageError
@@ -15,7 +15,7 @@ LABELS = dict(zip(CLASSES, ('Dermatitis', 'Infección por hongos', 'Sin signos d
 THRESHOLD = 60.0
 MAX_IMAGE_BYTES = 20 * 1024 * 1024
 MAX_IMAGE_PIXELS = 24_000_000
-TERMS_VERSION = '2026-11-05'
+TERMS_VERSION = '2026-11-06'
 ROLES = ('user', 'especialista', 'admin')
 ROLE_LABELS = {'user': 'Usuario', 'especialista': 'Especialista', 'admin': 'Administrador'}
 DISCLAIMER = ('AVISO: Este reporte es una sugerencia basada en IA. '
@@ -103,10 +103,9 @@ def validate_image(data, filename):
         raise AppError('No se puede leer la imagen. Puede estar dañada; selecciona otra fotografía JPG o PNG.') from None
 
 
-def teams_url(email, meeting_url=''):
-    if meeting_url:
-        parsed = urlparse(meeting_url)
-        if parsed.scheme != 'https' or parsed.hostname not in ('teams.microsoft.com', 'teams.live.com', 'teams.cloud.microsoft'):
-            raise AppError('El enlace de reunión configurado debe ser un enlace HTTPS de Microsoft Teams.')
-        return meeting_url
-    return 'https://teams.microsoft.com/l/call/0/0?' + urlencode({'users': email_address(email)})
+def whatsapp_url(phone):
+    """Build a click-to-chat URL from an international contact number."""
+    digits = re.sub(r'[ ()-]', '', str(phone or '').strip()).removeprefix('+')
+    if re.fullmatch(r'[1-9][0-9]{6,14}', digits):
+        return f'https://wa.me/{digits}'
+    return None

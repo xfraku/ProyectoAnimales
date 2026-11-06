@@ -1,6 +1,6 @@
 # Términos y Condiciones de PetSkin AI
 
-Versión: 5 de noviembre de 2026.
+Versión: 6 de noviembre de 2026.
 
 PetSkin AI ofrece orientación preliminar sobre fotografías de piel de perros y permite registrar pacientes, consultar un asistente de IA y descargar reportes. No reemplaza la evaluación, el diagnóstico ni el tratamiento indicado por un veterinario colegiado. Un puntaje de confianza del modelo no equivale a exactitud clínica. Un resultado sin signos detectados tampoco descarta una enfermedad.
 
@@ -10,6 +10,6 @@ Los usuarios y especialistas acceden a sus propias mascotas y consultas. El rol 
 
 Protege tu contraseña y comunica los accesos indebidos al administrador de la aplicación. Las consultas eliminadas no se pueden recuperar desde la aplicación. Sus archivos quedan pendientes de eliminación del almacenamiento si existe una interrupción del servicio. Los registros de seguridad y auditoría pueden conservarse para investigar incidentes.
 
-La opción “Llamar veterinario ahora” abre Microsoft Teams hacia el contacto o reunión configurados. La disponibilidad y la respuesta del destinatario no están garantizadas. En una emergencia, acude a un servicio veterinario y no esperes una videollamada.
+La opción “Llamar veterinario por WhatsApp” abre el chat del veterinario. Desde allí puedes iniciar la llamada de voz. La disponibilidad y la respuesta del destinatario no están garantizadas. En una emergencia, acude a un servicio veterinario y no esperes una videollamada.
 
 Puedes solicitar al administrador información sobre el uso, conservación o eliminación de tus datos y reportar errores. No utilices las respuestas de IA para automedicar a tu mascota. Al aceptar estos términos declaras comprender el alcance del servicio y autorizar el procesamiento descrito para atender tus consultas.

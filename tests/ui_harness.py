@@ -7,6 +7,7 @@ from pathlib import Path
 
 if os.environ.get('PETSKIN_UI_TEST') != '1' or os.environ.get('DB_HOST') != '127.0.0.1' or os.environ.get('DB_NAME') != 'petskin_test':
     raise RuntimeError('The UI harness requires the explicit isolated local test configuration.')
+os.environ['WHATSAPP_PHONE'] = '+12025550123'  # Fictional QA contact.
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
 from PIL import Image
 import brain

@@ -16,7 +16,7 @@ Los archivos fuente son `P20252051_PROYECTO_HU.xlsx` y `P20252051_PROYECTO_CP (1
 | 2797 | Confirmación antes de eliminar consulta y mensajes. | Cancelar conserva los datos; confirmar elimina. |
 | 2725 | Umbral del 60 %: por debajo se muestra “Resultado no concluyente”; se oculta la clase ganadora en contexto nuevo de IA y PDF. | Casos 59,999 % y 60 %, PDF y contexto de chat. No equivale a exactitud clínica. |
 | 2720 | Validación de formato de correo en registro y edición. | Ocho formatos inválidos, vacío, normalización. No verifica existencia del buzón. |
-| 2455 | Botón visible “Llamar veterinario ahora” dirigido a `gufa978@gmail.com`, con reunión configurable. | URL y botón comprobados. Falta llamada real con el destinatario. |
+| 2455 | Botón visible “Llamar veterinario por WhatsApp” dirigido al número de atención configurado. | URL y botón comprobados. Falta llamada real con el destinatario. |
 | 2454 | Mismo flujo de confirmación que 2797, también desde el historial. | Prueba de cancelar y confirmar. |
 | 2451 | Términos accesibles en Crear cuenta y al pie de las vistas autenticadas; aceptación registrada. | Por el ajuste solicitado, no se muestra el bloque de términos en Iniciar sesión. Se conserva la lógica de aceptación. |
 | 2450 | Correo único sin diferencias por mayúsculas/espacios; índice en PostgreSQL y error específico. | Registro duplicado y dos registros simultáneos. |
@@ -57,7 +57,7 @@ Además se elimina la creación innecesaria de `img_consultas`, origen del `File
 | CP018 | Gráfico por categoría, total de consultas y cantidad valorada como útil. Solo administradores. |
 | CP019 | Distribución por raza/color y registro de evidencia/acción recomendada. Solo administradores; no afirma detectar sesgo automáticamente. |
 | CP020 | Mensaje de credenciales inválidas; bloqueo de una hora tras cinco fallos. |
-| CP021 | Alerta roja ante respuesta de IA marcada urgente, persistida y acompañada del botón Teams. Probada con respuesta controlada; no valida sensibilidad clínica real. |
+| CP021 | Alerta roja ante respuesta de IA marcada urgente, persistida y acompañada del botón de WhatsApp. Probada con respuesta controlada; no valida sensibilidad clínica real. |
 | CP022 | PDF disponible al finalizar el análisis, visor, descarga y resumen actualizable de toda la conversación. |
 
 También se cubren HU0003-2 (cambio seguro de contraseña con confirmación), HU0007-1 (consejos preventivos administrables), HU00010 (valoraciones útiles), HU00011 (eventos de acceso) y HU00012 (evidencia de auditoría).

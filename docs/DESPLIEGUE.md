@@ -28,19 +28,7 @@ OPENAI_API_KEY
 
 `DB_USER` debe ser `petskin_app`, el usuario de aplicación creado previamente. La conexión remota verifica TLS usando `certs/us-east-2-bundle.pem`; no se conecta sin verificar el certificado.
 
-El destinatario ya viene configurado por defecto. Si quieres dejarlo explícito, añade en Secrets:
-
-```toml
-TEAMS_CONTACT_EMAIL = "gufa978@gmail.com"
-```
-
-El botón abre una llamada de Teams. La dirección debe corresponder a una identidad a la que la cuenta de Teams del usuario pueda llamar; conocer un Gmail por sí solo no garantiza esa compatibilidad. Prueba la llamada con el destinatario. Si su cuenta no permite la llamada directa, crea una reunión real de Teams y añade su enlace:
-
-```toml
-TEAMS_MEETING_URL = "PEGA_AQUI_EL_ENLACE_HTTPS_REAL_DE_TEAMS"
-```
-
-Reemplaza todo el valor por el enlace real antes de guardarlo. Si existe esta opción, el botón abre esa reunión. No es necesario modificar código.
+En los Secrets de Streamlit configura `WHATSAPP_PHONE` como texto con el número de atención y su código de país. El botón abre el chat de ese número. El usuario pulsa el ícono del teléfono para llamar.
 
 Los modelos de OpenAI por defecto siguen siendo `gpt-4o-mini`. Se pueden configurar con `VISION_MODEL` y `CHAT_MODEL`; cualquier sustitución debe admitir imágenes (para visión) y salidas JSON estructuradas. La validación agrega una llamada de IA por análisis y consume el saldo de OpenAI, independiente de los créditos de AWS.
 
@@ -52,7 +40,7 @@ Los modelos de OpenAI por defecto siguen siendo `gpt-4o-mini`. Se pueden configu
 4. Desde **Nueva consulta**, selecciona la mascota y una fotografía canina real. Pulsa **Analizar fotografía**. Esto confirma la conexión real a OpenAI, la carga del modelo y la escritura/lectura de S3.
 5. Sube una foto de un objeto, un archivo dañado y una imagen demasiado pequeña. Comprueba mensajes claros y que no se creen consultas. Para el filtro semántico usa varias fotos: es un control de IA, no una garantía de detección perfecta.
 6. Consulta los resultados, abre **Ver reporte PDF**, descarga y comprueba la imagen, acentos y datos. Envía dos preguntas, actualiza el resumen y vuelve a descargar.
-7. Abre **Llamar veterinario ahora** y confirma con el destinatario que la llamada o reunión es accesible. Esto no se probó llamándolo automáticamente.
+7. Abre **Llamar veterinario por WhatsApp**, verifica el destinatario y pulsa el ícono del teléfono para probar una llamada.
 8. Prueba cancelar y confirmar una eliminación, editar el correo, asignar especialista, suspender/reactivar y cambiar la contraseña. Mantén al menos un administrador activo.
 9. En otra sesión, falla cinco veces la contraseña de la cuenta de prueba. Verifica bloqueo de una hora y el evento de acceso en el panel administrativo. Si la plataforma no proporciona una IP, aparecerá vacía: no se inventa.
 10. En **Métricas y auditoría**, abre el gráfico, registra una observación y procesa los archivos pendientes de eliminación. Comprueba que no haya errores de permisos.
